@@ -18,6 +18,10 @@
 #   (optional) Whether to support virtual machine migration
 #   Defaults to false
 #
+# [*libvirt_live_migration_flag*]
+#   (optional) Flag nova should pass to libvirt when performing
+#   live virtual machine migrations
+#
 # [*libvirt_cpu_mode*]
 #   (optional) The libvirt CPU mode to configure.  Possible values
 #   include custom, host-model, None, host-passthrough.
@@ -69,6 +73,7 @@ class nova::compute::libvirt (
   $libvirt_virt_type                          = 'kvm',
   $vncserver_listen                           = '127.0.0.1',
   $migration_support                          = false,
+  $libvirt_live_migration_flag                = undef,
   $libvirt_cpu_mode                           = false,
   $libvirt_disk_cachemodes                    = [],
   $remove_unused_base_images                  = undef,
@@ -128,6 +133,11 @@ class nova::compute::libvirt (
       fail('For migration support to work, you MUST set vncserver_listen to \'0.0.0.0\'')
     } else {
       class { 'nova::migration::libvirt': }
+      if $libvirt_live_migration_flag {
+        nova_config {
+          'DEFAULT/libvirt_live_migration_flag':  value => $libvirt_live_migration_flag;
+        }
+      }
     }
   }
 
