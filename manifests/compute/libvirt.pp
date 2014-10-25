@@ -133,10 +133,10 @@ class nova::compute::libvirt (
       fail('For migration support to work, you MUST set vncserver_listen to \'0.0.0.0\'')
     } else {
       class { 'nova::migration::libvirt': }
-    }
-    if $libvirt_live_migration_flag {
-      nova_config {
-        'DEFAULT/libvirt_live_migration_flag':  value => $libvirt_live_migration_flag;
+      if $libvirt_live_migration_flag {
+        nova_config {
+          'DEFAULT/libvirt_live_migration_flag':  value => $libvirt_live_migration_flag;
+        }
       }
     }
   }
