@@ -315,7 +315,7 @@ class nova(
   $nova_group_id            = undef,
   $nova_public_key          = undef,
   $nova_private_key         = undef,
-  $nova_shell               = '/bin/false',
+  $nova_shell               = '/bin/bash',
   # deprecated in folsom
   #$root_helper = $::nova::params::root_helper,
   $monitoring_notifications = false,
