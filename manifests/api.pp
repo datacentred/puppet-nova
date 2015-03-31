@@ -106,6 +106,12 @@
 #   (optional) Shared secret to validate proxies Neutron metadata requests
 #   Defaults to undef
 #
+# [*pci_alias*]
+#   (optional) Pci passthrough for controller:
+#   Defaults to undef
+#   Example
+#   "[ {'vendor_id':'1234', 'product_id':'5678', 'name':'default'}, {...} ]"
+#
 # [*ratelimits*]
 #   (optional) A string that is a semicolon-separated list of 5-tuples.
 #   See http://docs.openstack.org/trunk/config-reference/content/configuring-compute-API.html
@@ -119,6 +125,26 @@
 # [*osapi_v3*]
 #   (optional) Enable or not Nova API v3
 #   Defaults to false
+#
+# [*validate*]
+#   (optional) Whether to validate the service is working after any service refreshes
+#   Defaults to false
+#
+# [*validation_options*]
+#   (optional) Service validation options
+#   Should be a hash of options defined in openstacklib::service_validation
+#   If empty, defaults values are taken from openstacklib function.
+#   Default command list nova flavors.
+#   Require validate set at True.
+#   Example:
+#   nova::api::validation_options:
+#     nova-api:
+#       command: check_nova.py
+#       path: /usr/bin:/bin:/usr/sbin:/sbin
+#       provider: shell
+#       tries: 5
+#       try_sleep: 10
+#   Defaults to {}
 #
 class nova::api(
   $admin_password,
@@ -146,25 +172,32 @@ class nova::api(
   $sync_db               = true,
   $neutron_metadata_proxy_shared_secret = undef,
   $osapi_v3              = false,
+  $pci_alias             = undef,
   $ratelimits            = undef,
   $ratelimits_factory    =
     'nova.api.openstack.compute.limits:RateLimitingMiddleware.factory',
+  $validate              = false,
+  $validation_options    = {},
   # DEPRECATED PARAMETER
   $workers               = undef,
   $conductor_workers     = undef,
 ) {
 
+  include nova::db
   include nova::params
+  include nova::policy
   require keystone::python
   include cinder::client
 
   Package<| title == 'nova-api' |> -> Nova_paste_api_ini<| |>
 
   Package<| title == 'nova-common' |> -> Class['nova::api']
+  Package<| title == 'nova-common' |> -> Class['nova::policy']
 
   Nova_paste_api_ini<| |> ~> Exec['post-nova_config']
 
   Nova_paste_api_ini<| |> ~> Service['nova-api']
+  Class['nova::policy'] ~> Service['nova-api']
 
   if $auth_strategy {
     warning('The auth_strategy parameter is deprecated and has no effect.')
@@ -206,22 +239,23 @@ class nova::api(
 
   if ($neutron_metadata_proxy_shared_secret){
     nova_config {
-      'DEFAULT/service_neutron_metadata_proxy': value => true;
-      'DEFAULT/neutron_metadata_proxy_shared_secret':
+      'neutron/service_metadata_proxy': value => true;
+      'neutron/metadata_proxy_shared_secret':
         value => $neutron_metadata_proxy_shared_secret;
     }
   } else {
     nova_config {
-      'DEFAULT/service_neutron_metadata_proxy':       value  => false;
-      'DEFAULT/neutron_metadata_proxy_shared_secret': ensure => absent;
+      'neutron/service_metadata_proxy':       value  => false;
+      'neutron/metadata_proxy_shared_secret': ensure => absent;
     }
   }
 
   if $auth_uri {
-    nova_config { 'keystone_authtoken/auth_uri': value => $auth_uri; }
+    $auth_uri_real = $auth_uri
   } else {
-    nova_config { 'keystone_authtoken/auth_uri': value => "${auth_protocol}://${auth_host}:5000/"; }
+    $auth_uri_real = "${auth_protocol}://${auth_host}:5000/"
   }
+  nova_config { 'keystone_authtoken/auth_uri': value => $auth_uri_real; }
 
   if $auth_version {
     nova_config { 'keystone_authtoken/auth_version': value => $auth_version; }
@@ -309,4 +343,19 @@ class nova::api(
     'filter:authtoken/auth_admin_prefix': ensure => absent;
   }
 
+  if $pci_alias {
+    nova_config {
+      'DEFAULT/pci_alias': value => check_array_of_hash($pci_alias);
+    }
+  }
+
+  if $validate {
+    $defaults = {
+      'nova-api' => {
+        'command'  => "nova --os-auth-url ${auth_uri_real} --os-tenant-name ${admin_tenant_name} --os-username ${admin_user} --os-password ${admin_password} flavor-list",
+      }
+    }
+    $validation_options_hash = merge ($defaults, $validation_options)
+    create_resources('openstacklib::service_validation', $validation_options_hash, {'subscribe' => 'Service[nova-api]'})
+  }
 }
