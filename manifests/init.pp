@@ -91,7 +91,7 @@
 #   (optional) SSL version to use (valid only if SSL enabled).
 #   Valid values are TLSv1, SSLv23 and SSLv3. SSLv2 may be
 #   available on some distributions.
-#   Defaults to 'SSLv3'
+#   Defaults to 'TLSv1'
 #
 # [*amqp_durable_queues*]
 #   (optional) Define queues as "durable" to rabbitmq.
@@ -286,7 +286,7 @@ class nova(
   $kombu_ssl_ca_certs       = undef,
   $kombu_ssl_certfile       = undef,
   $kombu_ssl_keyfile        = undef,
-  $kombu_ssl_version        = 'SSLv3',
+  $kombu_ssl_version        = 'TLSv1',
   $amqp_durable_queues      = false,
   $qpid_hostname            = 'localhost',
   $qpid_port                = '5672',
@@ -335,6 +335,9 @@ class nova(
   $logdir                   = false,
   $os_region_name           = undef,
 ) inherits nova::params {
+
+  # maintain backward compatibility
+  include nova::db
 
   if $mysql_module {
     warning('The mysql_module parameter is deprecated. The latest 2.x mysql module will be used.')
@@ -473,13 +476,15 @@ class nova(
 
   package { 'python-nova':
     ensure  => $ensure_package,
-    require => Package['python-greenlet']
+    require => Package['python-greenlet'],
+    tag     => ['openstack', 'nova'],
   }
 
   package { 'nova-common':
     ensure  => $ensure_package,
     name    => $::nova::params::common_package_name,
-    require => [Package['python-nova'], Anchor['nova-start']]
+    require => [Package['python-nova'], Anchor['nova-start']],
+    tag     => ['openstack', 'nova'],
   }
 
   file { '/etc/nova/nova.conf':
@@ -496,44 +501,11 @@ class nova(
     refreshonly => true,
   }
 
-  if $sql_connection {
-    warning('The sql_connection parameter is deprecated, use database_connection instead.')
-    $database_connection_real = $sql_connection
-  } else {
-    $database_connection_real = $database_connection
-  }
-
-  if $sql_idle_timeout {
-    warning('The sql_idle_timeout parameter is deprecated, use database_idle_timeout instead.')
-    $database_idle_timeout_real = $sql_idle_timeout
-  } else {
-    $database_idle_timeout_real = $database_idle_timeout
-  }
-
-  # both the database_connection and rabbit_host are things
-  # that may need to be collected from a remote host
-  if $database_connection_real {
-    if($database_connection_real =~ /mysql:\/\/\S+:\S+@\S+\/\S+/) {
-      require 'mysql::bindings'
-      require 'mysql::bindings::python'
-    } elsif($database_connection_real =~ /postgresql:\/\/\S+:\S+@\S+\/\S+/) {
-
-    } elsif($database_connection_real =~ /sqlite:\/\//) {
-
-    } else {
-      fail("Invalid db connection ${database_connection_real}")
-    }
-    nova_config {
-      'database/connection':   value => $database_connection_real, secret => true;
-      'database/idle_timeout': value => $database_idle_timeout_real;
-    }
-  }
-
   nova_config { 'DEFAULT/image_service': value => $image_service }
 
   if $image_service == 'nova.image.glance.GlanceImageService' {
     if $glance_api_servers {
-      nova_config { 'DEFAULT/glance_api_servers': value => $glance_api_servers }
+      nova_config { 'glance/api_servers': value => $glance_api_servers }
     }
   }
 

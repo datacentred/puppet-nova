@@ -18,7 +18,8 @@ describe 'nova' do
         )
         should contain_package('nova-common').with(
           :name    => platform_params[:nova_common_package],
-          :ensure  => 'present'
+          :ensure  => 'present',
+          :tag    => ['openstack', 'nova']
         )
       end
 
@@ -63,14 +64,9 @@ describe 'nova' do
         :refreshonly => true
       )}
 
-      it 'configures database' do
-        should_not contain_nova_config('database/connection')
-        should_not contain_nova_config('database/idle_timeout').with_value('3600')
-      end
-
       it 'configures image service' do
         should contain_nova_config('DEFAULT/image_service').with_value('nova.image.glance.GlanceImageService')
-        should contain_nova_config('DEFAULT/glance_api_servers').with_value('localhost:9292')
+        should contain_nova_config('glance/api_servers').with_value('localhost:9292')
       end
 
       it 'configures auth_strategy' do
@@ -111,9 +107,7 @@ describe 'nova' do
     context 'with overridden parameters' do
 
       let :params do
-        { :database_connection      => 'mysql://user:pass@db/db',
-          :database_idle_timeout    => '30',
-          :verbose                  => true,
+        { :verbose                  => true,
           :debug                    => true,
           :log_dir                  => '/var/log/nova2',
           :image_service            => 'nova.image.local.LocalImageService',
@@ -164,14 +158,9 @@ describe 'nova' do
         should contain_package('python-nova').with('ensure' => '2012.1.1-15.el6')
       end
 
-      it 'configures database' do
-        should contain_nova_config('database/connection').with_value('mysql://user:pass@db/db').with_secret(true)
-        should contain_nova_config('database/idle_timeout').with_value('30')
-      end
-
       it 'configures image service' do
         should contain_nova_config('DEFAULT/image_service').with_value('nova.image.local.LocalImageService')
-        should_not contain_nova_config('DEFAULT/glance_api_servers')
+        should_not contain_nova_config('glance/api_servers')
       end
 
       it 'configures auth_strategy' do
@@ -242,18 +231,6 @@ describe 'nova' do
 
       it 'configures database' do
         should contain_nova_config('DEFAULT/notify_on_state_change').with_value('vm_state')
-      end
-    end
-
-    context 'with deprecated sql parameters' do
-      let :params do
-        { :sql_connection   => 'mysql://user:pass@db/db',
-          :sql_idle_timeout => '30' }
-      end
-
-      it 'configures database' do
-        should contain_nova_config('database/connection').with_value('mysql://user:pass@db/db').with_secret(true)
-        should contain_nova_config('database/idle_timeout').with_value('30')
       end
     end
 
@@ -374,7 +351,7 @@ describe 'nova' do
         should contain_nova_config('DEFAULT/kombu_ssl_ca_certs').with_ensure('absent')
         should contain_nova_config('DEFAULT/kombu_ssl_certfile').with_ensure('absent')
         should contain_nova_config('DEFAULT/kombu_ssl_keyfile').with_ensure('absent')
-        should contain_nova_config('DEFAULT/kombu_ssl_version').with_value('SSLv3')
+        should contain_nova_config('DEFAULT/kombu_ssl_version').with_value('TLSv1')
       end
     end
 
@@ -383,7 +360,7 @@ describe 'nova' do
         {
           :rabbit_password    => 'pass',
           :rabbit_use_ssl     => false,
-          :kombu_ssl_version  => 'SSLv3',
+          :kombu_ssl_version  => 'TLSv1',
         }
       end
 

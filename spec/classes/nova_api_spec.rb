@@ -28,8 +28,10 @@ describe 'nova::api' do
         should contain_package('nova-api').with(
           :name   => platform_params[:nova_api_package],
           :ensure => 'present',
-          :notify => 'Service[nova-api]'
+          :notify => 'Service[nova-api]',
+          :tag    => ['openstack', 'nova']
         )
+        should_not contain_exec('validate_nova_api')
       end
 
       it 'configures keystone_authtoken middleware' do
@@ -68,8 +70,8 @@ describe 'nova::api' do
       end
 
       it 'unconfigures neutron_metadata proxy' do
-        should contain_nova_config('DEFAULT/service_neutron_metadata_proxy').with(:value => false)
-        should contain_nova_config('DEFAULT/neutron_metadata_proxy_shared_secret').with(:ensure => 'absent')
+        should contain_nova_config('neutron/service_metadata_proxy').with(:value => false)
+        should contain_nova_config('neutron/metadata_proxy_shared_secret').with(:ensure => 'absent')
       end
     end
 
@@ -108,13 +110,15 @@ describe 'nova::api' do
           :metadata_workers                     => 2,
           :osapi_v3                             => true,
           :keystone_ec2_url                     => 'https://example.com:5000/v2.0/ec2tokens',
+          :pci_alias                            => "[{\"vendor_id\":\"8086\",\"product_id\":\"0126\",\"name\":\"graphic_card\"},{\"vendor_id\":\"9096\",\"product_id\":\"1520\",\"name\":\"network_card\"}]"
         })
       end
 
       it 'installs nova-api package and service' do
         should contain_package('nova-api').with(
           :name   => platform_params[:nova_api_package],
-          :ensure => '2012.1-2'
+          :ensure => '2012.1-2',
+          :tag    => ['openstack', 'nova']
         )
         should contain_service('nova-api').with(
           :name      => platform_params[:nova_api_service],
@@ -155,13 +159,19 @@ describe 'nova::api' do
         should contain_nova_config('DEFAULT/use_forwarded_for').with('value' => false)
         should contain_nova_config('DEFAULT/osapi_compute_workers').with('value' => '1')
         should contain_nova_config('DEFAULT/metadata_workers').with('value' => '2')
-        should contain_nova_config('DEFAULT/service_neutron_metadata_proxy').with('value' => true)
-        should contain_nova_config('DEFAULT/neutron_metadata_proxy_shared_secret').with('value' => 'secrete')
+        should contain_nova_config('neutron/service_metadata_proxy').with('value' => true)
+        should contain_nova_config('neutron/metadata_proxy_shared_secret').with('value' => 'secrete')
         should contain_nova_config('DEFAULT/keystone_ec2_url').with('value' => 'https://example.com:5000/v2.0/ec2tokens')
       end
 
       it 'configure nova api v3' do
         should contain_nova_config('osapi_v3/enabled').with('value' => true)
+      end
+
+      it 'configures nova pci_alias entries' do
+        should contain_nova_config('DEFAULT/pci_alias').with(
+          'value' => "[{\"vendor_id\":\"8086\",\"product_id\":\"0126\",\"name\":\"graphic_card\"},{\"vendor_id\":\"9096\",\"product_id\":\"1520\",\"name\":\"network_card\"}]"
+        )
       end
     end
 
@@ -182,6 +192,45 @@ describe 'nova::api' do
       end
     end
 
+    context 'while validating the service with default command' do
+      before do
+        params.merge!({
+          :validate => true,
+        })
+      end
+      it { should contain_exec('execute nova-api validation').with(
+        :path        => '/usr/bin:/bin:/usr/sbin:/sbin',
+        :provider    => 'shell',
+        :tries       => '10',
+        :try_sleep   => '2',
+        :command     => 'nova --os-auth-url http://127.0.0.1:5000/ --os-tenant-name services --os-username nova --os-password passw0rd flavor-list',
+      )}
+
+      it { should contain_anchor('create nova-api anchor').with(
+        :require => 'Exec[execute nova-api validation]',
+      )}
+    end
+
+    context 'while validating the service with custom command' do
+      before do
+        params.merge!({
+          :validate            => true,
+          :validation_options  => { 'nova-api' => { 'command' => 'my-script' } }
+        })
+      end
+      it { should contain_exec('execute nova-api validation').with(
+        :path        => '/usr/bin:/bin:/usr/sbin:/sbin',
+        :provider    => 'shell',
+        :tries       => '10',
+        :try_sleep   => '2',
+        :command     => 'my-script',
+      )}
+
+      it { should contain_anchor('create nova-api anchor').with(
+        :require => 'Exec[execute nova-api validation]',
+      )}
+    end
+
     context 'while not managing service state' do
       before do
         params.merge!({
@@ -192,6 +241,29 @@ describe 'nova::api' do
 
       it { should contain_service('nova-api').without_ensure }
     end
+
+    context 'with default database parameters' do
+      let :pre_condition do
+        "include nova"
+      end
+
+      it { should_not contain_nova_config('database/connection') }
+      it { should_not contain_nova_config('database/idle_timeout').with_value('3600') }
+    end
+
+    context 'with overridden database parameters' do
+      let :pre_condition do
+        "class { 'nova':
+           database_connection   => 'mysql://user:pass@db/db',
+           database_idle_timeout => '30',
+         }
+        "
+      end
+
+      it { should contain_nova_config('database/connection').with_value('mysql://user:pass@db/db').with_secret(true) }
+      it { should contain_nova_config('database/idle_timeout').with_value('30') }
+    end
+
   end
 
   context 'on Debian platforms' do

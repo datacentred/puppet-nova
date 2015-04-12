@@ -60,7 +60,8 @@ describe 'nova::cells' do
     it 'installs nova-cells package' do
       should contain_package('nova-cells').with(
         :ensure => 'present',
-        :name   => platform_params[:cells_package_name]
+        :name   => platform_params[:cells_package_name],
+        :tag    => ['openstack', 'nova']
       )
     end
 
@@ -106,6 +107,7 @@ describe 'nova::cells' do
     end
     it { should contain_nova_config('cells/name').with_value(expected_params[:cell_name]) }
     it { should contain_nova_config('DEFAULT/compute_api_class').with_value('nova.compute.cells_api.ComputeCellsAPI')}
+    it { should contain_nova_config('cells/cell_type').with_value('api')}
     it_configures 'nova-cells'
   end
 
@@ -133,6 +135,7 @@ describe 'nova::cells' do
     end
     it { should contain_nova_config('cells/name').with_value(expected_params[:cell_name]) }
     it { should contain_nova_config('DEFAULT/quota_driver').with_value('nova.quota.NoopQuotaDriver')}
+    it { should contain_nova_config('cells/cell_type').with_value('compute')}
     it_configures 'nova-cells'
   end
 
