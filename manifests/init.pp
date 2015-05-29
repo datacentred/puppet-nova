@@ -25,15 +25,20 @@
 #   (optional) Connection url to connect to nova database.
 #   Defaults to false
 #
+# [*slave_connection*]
+#   (optional) Connection url to connect to nova slave database (read-only).
+#   Defaults to false
+#
 # [*database_idle_timeout*]
 #   (optional) Timeout before idle db connections are reaped.
 #   Defaults to 3600
 #
 # [*rpc_backend*]
 #   (optional) The rpc backend implementation to use, can be:
-#     nova.openstack.common.rpc.impl_kombu (for rabbitmq)
-#     nova.openstack.common.rpc.impl_qpid  (for qpid)
-#   Defaults to 'nova.openstack.common.rpc.impl_kombu'
+#     rabbit (for rabbitmq)
+#     qpid (for qpid)
+#     zmq (for zeromq)
+#   Defaults to 'rabbit'
 #
 # [*image_service*]
 #   (optional) Service used to search for and retrieve images.
@@ -268,8 +273,9 @@
 class nova(
   $ensure_package           = 'present',
   $database_connection      = false,
+  $slave_connection         = false,
   $database_idle_timeout    = 3600,
-  $rpc_backend              = 'nova.openstack.common.rpc.impl_kombu',
+  $rpc_backend              = 'rabbit',
   $image_service            = 'nova.image.glance.GlanceImageService',
   # these glance params should be optional
   # this should probably just be configured as a glance client
@@ -517,7 +523,9 @@ class nova(
     nova_config { 'DEFAULT/memcached_servers': ensure => absent }
   }
 
-  if $rpc_backend == 'nova.openstack.common.rpc.impl_kombu' {
+  # we keep "nova.openstack.common.rpc.impl_kombu" for backward compatibility
+  # but since Icehouse, "rabbit" is enough.
+  if $rpc_backend == 'nova.openstack.common.rpc.impl_kombu' or $rpc_backend == 'rabbit' {
     # I may want to support exporting and collecting these
     nova_config {
       'DEFAULT/rabbit_password':     value => $rabbit_password, secret => true;
@@ -580,7 +588,9 @@ class nova(
     }
   }
 
-  if $rpc_backend == 'nova.openstack.common.rpc.impl_qpid' {
+  # we keep "nova.openstack.common.rpc.impl_qpid" for backward compatibility
+  # but since Icehouse, "qpid" is enough.
+  if $rpc_backend == 'nova.openstack.common.rpc.impl_qpid' or $rpc_backend == 'qpid' {
     nova_config {
       'DEFAULT/qpid_hostname':               value => $qpid_hostname;
       'DEFAULT/qpid_port':                   value => $qpid_port;
@@ -644,7 +654,7 @@ class nova(
       ensure  => directory,
       mode    => '0750',
       owner   => 'nova',
-      group   => 'nova',
+      group   => $::nova::params::nova_log_group,
       require => Package['nova-common'],
     }
     nova_config { 'DEFAULT/log_dir': value => $log_dir_real;}

@@ -24,9 +24,9 @@
 #
 # [*libvirt_cpu_mode*]
 #   (optional) The libvirt CPU mode to configure.  Possible values
-#   include custom, host-model, None, host-passthrough.
+#   include custom, host-model, none, host-passthrough.
 #   Defaults to 'host-model' if libvirt_virt_type is set to either
-#   kvm or qemu, otherwise defaults to 'None'.
+#   kvm or qemu, otherwise defaults to 'none'.
 #
 # [*libvirt_disk_cachemodes*]
 #   (optional) A list of cachemodes for different disk types, e.g.
@@ -120,7 +120,7 @@ class nova::compute::libvirt (
         $libvirt_cpu_mode_real = 'host-model'
       }
       default: {
-        $libvirt_cpu_mode_real = 'None'
+        $libvirt_cpu_mode_real = 'none'
       }
     }
   } else {
@@ -147,8 +147,8 @@ class nova::compute::libvirt (
   }
 
   if $migration_support {
-    if $vncserver_listen != '0.0.0.0' {
-      fail('For migration support to work, you MUST set vncserver_listen to \'0.0.0.0\'')
+    if $vncserver_listen != '0.0.0.0' and $vncserver_listen != '::0' {
+      fail('For migration support to work, you MUST set vncserver_listen to \'0.0.0.0\' or \'::0\'')
     } else {
       class { 'nova::migration::libvirt': }
       if $libvirt_live_migration_flag {
