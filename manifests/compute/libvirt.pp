@@ -138,7 +138,7 @@ class nova::compute::libvirt (
       ensure   => running,
       enable   => true,
       name     => $::nova::params::messagebus_service_name,
-      provider => $::nova::params::special_service_provider,
+      provider => $::nova::special_service_provider,
     }
     Package['libvirt'] -> Service['messagebus'] -> Service['libvirt']
   }
@@ -178,7 +178,7 @@ class nova::compute::libvirt (
     ensure   => running,
     enable   => true,
     name     => $libvirt_service_name,
-    provider => $::nova::params::special_service_provider,
+    provider => $::nova::special_service_provider,
     require  => Package['libvirt'],
   }
 

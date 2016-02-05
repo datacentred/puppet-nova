@@ -405,6 +405,8 @@ class nova(
   $upgrade_level_intercell            = undef,
   $upgrade_level_network              = undef,
   $upgrade_level_scheduler            = undef,
+  # DataCentred Hacks
+  $special_service_provider           = $::nova::params::special_service_provider,
 ) inherits nova::params {
 
   # maintain backward compatibility
